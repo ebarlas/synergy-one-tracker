@@ -40,7 +40,8 @@ make RGB_LIB_DISTRIBUTION=../rpi-rgb-led-matrix
 ### Linux Services
 
 Install the app as a service using the steps in the raspberrypi.org systemd [reference document](https://www.raspberrypi.org/documentation/linux/usage/systemd.md).
-The `coupons.sh` and `coupons.service` files are included as a convenience.
+The `coupons.sh` and `coupons.service` files are included as a convenience. The same apply for the
+`synergy` service.
 
 ```shell script
 cp coupons.service /etc/systemd/system/
