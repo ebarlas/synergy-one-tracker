@@ -1,0 +1,13 @@
+[Unit]
+Description=Synergy
+
+[Service]
+ExecStart=/root/synergy-one-tracker/synergy.sh
+WorkingDirectory=/root/synergy-one-tracker
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
+User=root
+
+[Install]
+WantedBy=multi-user.target
