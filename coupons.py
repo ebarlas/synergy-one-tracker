@@ -113,7 +113,7 @@ def write_coupons_messages(coupon_names, coupons):
         coupon = coupons.get(name)
         if coupon:
             change = int(round((coupon['currentPrice'] - coupon['previousClose']) * 100.0))
-            up = "+" if change >= 0 else "-"
+            up = "++" if change >= 0 else "-"
             lines.append(f'{up}{change} bp {coupon["name"]} {coupon["currentPrice"]:.2f}')
     with open('coupons.txt', 'w') as f:
         f.write('\n'.join(lines))
