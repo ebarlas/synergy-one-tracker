@@ -3,6 +3,7 @@
 #include <iostream>
 #include <fstream>
 #include <algorithm>
+#include <memory>
 #include "led-matrix.h"
 #include "graphics.h"
 
@@ -218,7 +219,7 @@ struct SynergyAnimation : public Animation {
                 tick++;
             }
             return false;
-        } else if(state == State::PAUSE) {
+        } else if (state == State::PAUSE) {
             renderScroll(buffer);
             state = State::SCROLL;
             return false;
@@ -234,14 +235,15 @@ struct SynergyAnimation : public Animation {
 };
 
 struct ScrollingMessage : Animation {
-    Frame *frame;
     rgb_matrix::Font *font;
     rgb_matrix::Color *color;
     std::string message;
     int left;
 
-    ScrollingMessage(Frame *frame, rgb_matrix::Font *font, rgb_matrix::Color *color, std::string message)
-            : frame(frame), font(font), color(color), message(std::move(message)) {}
+    ScrollingMessage(rgb_matrix::Font *font, rgb_matrix::Color *color, std::string message)
+            : font(font), color(color), message(std::move(message)) {}
+
+    virtual ~ScrollingMessage() = default;
 
     void init(rgb_matrix::FrameCanvas *buffer) override {
         left = buffer->width();
@@ -264,45 +266,54 @@ struct ScrollingMessage : Animation {
     }
 
     bool render(rgb_matrix::FrameCanvas *buffer) override {
+        int length = render(buffer, left, 0);
+        left--;
+        return left + length < 0;
+    }
+};
+
+struct ScrollingIconMessage : ScrollingMessage {
+    Frame *frame;
+
+    ScrollingIconMessage(Frame *frame, rgb_matrix::Font *font, rgb_matrix::Color *color, std::string message)
+            : ScrollingMessage(font, color, message), frame(frame) {}
+
+    bool render(rgb_matrix::FrameCanvas *buffer) override {
         frame->render(buffer, left, 3);
-        int length = render(buffer, left + frame->width + 2, 0);
+        int length = ScrollingMessage::render(buffer, left + frame->width + 2, 0);
         left--;
         return left + frame->width + 2 + length < 0;
     }
 };
 
-struct Coupon {
-    std::string message;
-    bool up;
-
-    static Coupon load(std::istream &is) {
+static std::vector<std::string> getLines(const char *file) {
+    std::vector<std::string> vec;
+    std::ifstream is(file);
+    while (is.good()) {
         std::string message;
         std::getline(is, message);
-        return {message.substr(1), message[0] == '+'};
+        vec.push_back(std::move(message));
     }
+    is.close();
+    return vec;
+}
 
-    static std::vector<Coupon> load(const char *file) {
-        std::vector<Coupon> vec;
-        std::ifstream is(file);
-        while (is.good()) {
-            vec.push_back(load(is));
+static std::vector<std::unique_ptr<ScrollingMessage>> getMessages(
+        std::vector<std::string> &lines,
+        rgb_matrix::Font *font,
+        rgb_matrix::Color *color,
+        Sprite &arrows) {
+    std::vector<std::unique_ptr<ScrollingMessage>> vec;
+    for (auto it = lines.begin(); it != lines.end(); it++) {
+        auto &line = *it;
+        if (it == lines.begin()) {
+            vec.push_back(std::make_unique<ScrollingMessage>(font, color, line));
+        } else {
+            auto &frame = arrows.frames[line[0] == '+' ? 0 : 1];
+            vec.push_back(std::make_unique<ScrollingIconMessage>(&frame, font, color, line.substr(1)));
         }
-        is.close();
-        return vec;
     }
-};
-
-std::vector<ScrollingMessage> makeMessages(
-        std::vector<Coupon> &coupons,
-        rgb_matrix::Font &font,
-        rgb_matrix::Color &color,
-        Sprite &arrowsSprite) {
-    std::vector<ScrollingMessage> messages;
-    for (auto &coupon : coupons) {
-        auto &frame = arrowsSprite.frames[coupon.up ? 0 : 1];
-        messages.emplace_back(&frame, &font, &color, coupon.message);
-    }
-    return messages;
+    return vec;
 }
 
 void renderLoop(std::vector<Animation *> &animations, rgb_matrix::RGBMatrix *canvas, rgb_matrix::FrameCanvas *buffer) {
@@ -352,12 +363,13 @@ int main(int argc, char *argv[]) {
     SynergyAnimation sa{synergy, 20, 10, 5, 1000, 60};
 
     while (!interrupted) {
+        std::vector<std::string> lines = getLines(argv[2]);
+        std::vector<std::unique_ptr<ScrollingMessage>> msgs = getMessages(lines, &font, &color, arrows);
+
         std::vector<Animation *> animations;
         animations.push_back(&sa);
-
-        std::vector<Coupon> coupons = Coupon::load(argv[2]);
-        std::vector<ScrollingMessage> messages = makeMessages(coupons, font, color, arrows);
-        std::for_each(messages.begin(), messages.end(), [&animations](ScrollingMessage &m) { animations.push_back(&m); });
+        auto fn = [&animations](std::unique_ptr<ScrollingMessage> &m) { animations.push_back(&(*m)); };
+        std::for_each(msgs.begin(), msgs.end(), fn);
 
         renderLoop(animations, canvas, buffer);
     }

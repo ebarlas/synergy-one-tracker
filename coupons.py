@@ -7,6 +7,7 @@ import urllib.parse
 import logging
 import logging.handlers
 import json
+import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +109,8 @@ def init_websock(url_token, url_ws, send_messages, coupon_names, callback):
 
 
 def write_coupons_messages(coupon_names, coupons):
-    lines = []
+    date = datetime.datetime.now().strftime('%a %I:%M %p').replace(' 0', ' ')
+    lines = [date]
     for name in coupon_names:
         coupon = coupons.get(name)
         if coupon:
